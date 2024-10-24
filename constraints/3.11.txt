@@ -214,7 +214,7 @@ tornado==6.4
 tqdm==4.66.1
 traitlets==5.14.3
 tree-sitter==0.22.3
-tree-sitter-python==0.21.0
+tree-sitter-python>=0.21.0
 twine==4.0.2
 typer==0.9.0
 types-psutil==6.0.0.20240621

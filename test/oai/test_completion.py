@@ -2,6 +2,8 @@ import json
 import random
 import unittest
 
+from loguru import logger
+
 from rdagent.oai.llm_utils import APIBackend
 
 
@@ -41,9 +43,9 @@ class TestChatCompletion(unittest.TestCase):
         fruit_name = random.SystemRandom().choice(["apple", "banana", "orange", "grape", "watermelon"])
         user_prompt_1 = (
             f"I will tell you a name of fruit, please remember them and tell me later. "
-            f"The name is {fruit_name}. Once you remember it, please answer OK."
+            f"The name is {fruit_name}. Once you remember it, please answer OK.."
         )
-        user_prompt_2 = "What is the name of the fruit I told you before?"
+        user_prompt_2 = "What is the name of the fruit I told you before??"
 
         session = APIBackend().build_chat_session(session_system_prompt=system_prompt)
 
@@ -114,12 +116,30 @@ class TestChatCompletion(unittest.TestCase):
             LLM_SETTINGS.dump_chat_cache,
         ) = origin_value
 
-        assert (
-            response1 != response3 and response2 != response4
-        ), "Responses sequence should be determined by 'init_chat_cache_seed'"
-        assert (
-            response1 == response5 and response2 == response6
-        ), "Responses sequence should be determined by 'init_chat_cache_seed'"
+        try:
+            assert (
+                response1 != response3 and response2 != response4
+            ), "Responses sequence should be determined by 'init_chat_cache_seed'"
+        except AssertionError:
+            logger.error(f"Assertion failed: response1 != response3 and response2 != response4")
+            logger.error(f"response1: {response1[:100]}...")
+            logger.error(f"response2: {response2[:100]}...")
+            logger.error(f"response3: {response3[:100]}...")
+            logger.error(f"response4: {response4[:100]}...")
+            raise
+
+        try:
+            assert (
+                response1 == response5 and response2 == response6
+            ), "Responses sequence should be determined by 'init_chat_cache_seed'"
+        except AssertionError:
+            logger.error(f"Assertion failed: response1 == response5 and response2 == response6")
+            logger.error(f"response1: {response1[:100]}...")
+            logger.error(f"response2: {response2[:100]}...")
+            logger.error(f"response5: {response5[:100]}...")
+            logger.error(f"response6: {response6[:100]}...")
+            raise
+
         assert (
             response1 != response2 and response3 != response4 and response5 != response6
         ), "Same question should get different response when use_auto_chat_cache_seed_gen=True"
@@ -164,9 +184,17 @@ class TestChatCompletion(unittest.TestCase):
             LLM_SETTINGS.dump_chat_cache,
         ) = origin_value
         for i in range(len(func_calls)):
-            assert (
-                responses1[i] != responses2[i] and responses1[i] == responses3[i]
-            ), "Responses sequence should be determined by 'init_chat_cache_seed'"
+            try:
+                assert (
+                    responses1[i] != responses2[i] and responses1[i] == responses3[i]
+                ), "Responses sequence should be determined by 'init_chat_cache_seed'"
+            except AssertionError:
+                logger.error(f"Assertion failed: responses1[i] != responses2[i] and responses1[i] == responses3[i]")
+                logger.error(f"responses1[i]: {responses1[i][:100]}...")
+                logger.error(f"responses2[i]: {responses2[i][:100]}...")
+                logger.error(f"responses3[i]: {responses3[i][:100]}...")
+                raise
+            
             for j in range(i + 1, len(func_calls)):
                 assert (
                     responses1[i] != responses1[j] and responses2[i] != responses2[j]
