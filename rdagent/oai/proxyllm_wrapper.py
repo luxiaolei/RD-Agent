@@ -41,6 +41,9 @@ from typing import Any, Dict, List, Optional, Union
 
 import requests
 from loguru import logger
+from json_repair import repair_json
+from langchain.schema import HumanMessage, SystemMessage, AIMessage
+from langserve import RemoteRunnable
 
 
 class EmbeddingResponse:
@@ -116,7 +119,7 @@ class ChatCompletionClient:
 
     def create(self, model: str, messages: List[Dict[str, str]], **kwargs) -> ChatCompletionResponse:
         """
-        Create a chat completion.
+        Create a chat completion using RemoteRunnable.
 
         Args:
             model (str): The model to use for chat completion. Use "pro" or "flash" in the name to select the endpoint.
@@ -130,44 +133,70 @@ class ChatCompletionClient:
             ValueError: If the model name doesn't contain "pro" or "flash".
         """
         if "pro" in model.lower():
-            endpoint = f"{self.base_url}/proxyllm/pro/invoke"
+            endpoint = f"{self.base_url}/proxyllm/pro"
         elif "flash" in model.lower():
-            endpoint = f"{self.base_url}/proxyllm/flash/invoke"
+            endpoint = f"{self.base_url}/proxyllm/flash"
         else:
             # default to pro
-            endpoint = f"{self.base_url}/proxyllm/pro/invoke"
+            endpoint = f"{self.base_url}/proxyllm/pro"
 
-        payload = {
-            "input": "\n".join([f"{m['role']}: {m['content']}" for m in messages]),
-            **kwargs
-        }
+        # Convert messages to LangChain format
+        langchain_messages = []
+        for message in messages:
+            if message["role"] == "system":
+                langchain_messages.append(SystemMessage(content=message["content"]))
+            elif message["role"] == "user":
+                langchain_messages.append(HumanMessage(content=message["content"]))
+            elif message["role"] == "assistant":
+                langchain_messages.append(AIMessage(content=message["content"]))
 
-        # Add this block to handle JSON mode
-        if kwargs.get("response_format", {}).get("type") == "json_object":
-            payload["response_format"] = {"type": "json_object"}
+        # Create RemoteRunnable
+        remote_runnable = RemoteRunnable(endpoint, headers=self.headers)
 
         try:
-            response = requests.post(endpoint, json=payload, headers=self.headers)
-            response.raise_for_status()
-            data = response.json()
+            # Invoke RemoteRunnable
+            result = remote_runnable.invoke({
+                "messages": langchain_messages,
+            })
+
+            # Process the result
+            content = result.content if hasattr(result, 'content') else str(result)
             
-            # Ensure the response is in JSON format when requested
-            if payload.get("response_format", {}).get("type") == "json_object":
+            # Handle JSON mode
+            if kwargs.get("response_format", {}).get("type") == "json_object":
                 try:
-                    json.loads(data["output"]["content"])
-                except json.JSONDecodeError:
-                    data["output"]["content"] = json.dumps({"error": "Invalid JSON response"})
-            
+                    repaired_json = repair_json(content)
+                    parsed_json = json.loads(repaired_json)  # type: ignore
+                    
+                    # Check if the parsed JSON is a list
+                    if isinstance(parsed_json, list):
+                        # Find the first dictionary in the list
+                        content = next((item for item in parsed_json if isinstance(item, dict)), None)
+                        if content is None:
+                            raise ValueError("No dictionary found in the JSON list")
+                    elif isinstance(parsed_json, dict):
+                        content = parsed_json
+                    else:
+                        raise ValueError("Parsed JSON is neither a list nor a dictionary")
+                    
+                    content = json.dumps(content)  # Convert back to JSON string
+                except Exception as e:
+                    logger.warning(f"Failed to repair JSON: {e}")
+                    content = json.dumps({"error": f"Invalid JSON response: {content}"})
+
             choices = [{
                 "message": {
                     "role": "assistant",
-                    "content": data["output"]["content"]
+                    "content": content
                 },
-                "finish_reason": data["output"].get("response_metadata", {}).get("finish_reason", '')
+                "finish_reason": "stop"  # Assuming 'stop' as default finish reason
             }]
-            usage = data["output"].get("usage_metadata", {})
+            
+            # Assuming usage data is not available in this format
+            usage = {}
+            
             return ChatCompletionResponse(choices, usage)
-        except requests.RequestException as e:
+        except Exception as e:
             logger.error(f"Error creating chat completion: {e}")
             raise
 

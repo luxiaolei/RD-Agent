@@ -22,10 +22,10 @@ class LLMSettings(BaseSettings):
     init_chat_cache_seed: int = 42
 
     # Chat configs
-    chat_model: str = "gemini-1.5-flash-latest"
+    chat_model: str = "gemini-1.5-pro-latest"
     chat_max_tokens: int = 120000
     chat_temperature: float = 0.5
-    chat_stream: bool = True
+    chat_stream: bool = False
     chat_seed: int | None = None
     chat_frequency_penalty: float = 0.0
     chat_presence_penalty: float = 0.0
@@ -34,7 +34,7 @@ class LLMSettings(BaseSettings):
 
     # Embedding configs
     embedding_model: str = "text-embedding-ada-002"
-    embedding_max_str_num: int = 50
+    embedding_max_str_num: int = 100
 
     # ProxyLLM configs
 
