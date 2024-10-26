@@ -10,8 +10,9 @@ BASE_URL = "http://185.150.189.132:8011"
 AUTH_TOKEN = "EAFramwork@2024"
 
 # Create RemoteRunnable instances for your endpoints with authentication
-proxyllm_pro = RemoteRunnable(f"{BASE_URL}/proxyllm/pro/", headers={"X-Token": AUTH_TOKEN})
-proxyllm_flash = RemoteRunnable(f"{BASE_URL}/proxyllm/flash/", headers={"X-Token": AUTH_TOKEN})
+
+proxyllm_pro = RemoteRunnable(f"{BASE_URL}/proxyllm/pro/mid_temp", headers={"X-Token": AUTH_TOKEN})
+proxyllm_flash = RemoteRunnable(f"{BASE_URL}/proxyllm/flash/mid_temp", headers={"X-Token": AUTH_TOKEN})
 
 
 

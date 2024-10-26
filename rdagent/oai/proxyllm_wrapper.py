@@ -130,12 +130,12 @@ class ChatCompletionClient:
             ValueError: If the model name doesn't contain "pro" or "flash".
         """
         if "pro" in model.lower():
-            endpoint = f"{self.base_url}/proxyllm/pro/invoke"
+            endpoint = f"{self.base_url}/proxyllm/pro/mid_temp/invoke"
         elif "flash" in model.lower():
-            endpoint = f"{self.base_url}/proxyllm/flash/invoke"
+            endpoint = f"{self.base_url}/proxyllm/flash/mid_temp/invoke"
         else:
             # default to pro
-            endpoint = f"{self.base_url}/proxyllm/pro/invoke"
+            endpoint = f"{self.base_url}/proxyllm/pro/mid_temp/invoke"
 
         payload = {
             "input": "\n".join([f"{m['role']}: {m['content']}" for m in messages]),
