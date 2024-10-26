@@ -377,7 +377,7 @@ class APIBackend:
                     input=sliced_filtered_input_content_list,
                 )
                 for index, data in enumerate(response.data):
-                    content_to_embedding_dict[sliced_filtered_input_content_list[index]] = data["embedding"]
+                    content_to_embedding_dict[sliced_filtered_input_content_list[index]] = data
 
                 if self.dump_embedding_cache:
                     self.cache.embedding_set(content_to_embedding_dict)

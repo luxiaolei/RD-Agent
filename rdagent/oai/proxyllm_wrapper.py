@@ -41,6 +41,9 @@ from typing import Any, Dict, List, Optional, Union
 
 import requests
 from loguru import logger
+from json_repair import repair_json
+from langchain.schema import HumanMessage, SystemMessage, AIMessage
+from langserve import RemoteRunnable
 
 
 class EmbeddingResponse:
@@ -116,7 +119,7 @@ class ChatCompletionClient:
 
     def create(self, model: str, messages: List[Dict[str, str]], **kwargs) -> ChatCompletionResponse:
         """
-        Create a chat completion.
+        Create a chat completion using RemoteRunnable.
 
         Args:
             model (str): The model to use for chat completion. Use "pro" or "flash" in the name to select the endpoint.
@@ -135,6 +138,52 @@ class ChatCompletionClient:
             endpoint = f"{self.base_url}/proxyllm/flash/mid_temp/invoke"
         else:
             # default to pro
+            endpoint = f"{self.base_url}/proxyllm/pro"
+
+        # Convert messages to LangChain format
+        langchain_messages = []
+        for message in messages:
+            if message["role"] == "system":
+                langchain_messages.append(SystemMessage(content=message["content"]))
+            elif message["role"] == "user":
+                langchain_messages.append(HumanMessage(content=message["content"]))
+            elif message["role"] == "assistant":
+                langchain_messages.append(AIMessage(content=message["content"]))
+
+        # Create RemoteRunnable
+        remote_runnable = RemoteRunnable(endpoint, headers=self.headers)
+
+        try:
+            # Invoke RemoteRunnable
+            result = remote_runnable.invoke({
+                "messages": langchain_messages,
+            })
+
+            # Process the result
+            content = result.content if hasattr(result, 'content') else str(result)
+            
+            # Handle JSON mode
+            if kwargs.get("response_format", {}).get("type") == "json_object":
+                try:
+                    repaired_json = repair_json(content)
+                    parsed_json = json.loads(repaired_json)  # type: ignore
+                    
+                    # Check if the parsed JSON is a list
+                    if isinstance(parsed_json, list):
+                        # Find the first dictionary in the list
+                        content = next((item for item in parsed_json if isinstance(item, dict)), None)
+                        if content is None:
+                            raise ValueError("No dictionary found in the JSON list")
+                    elif isinstance(parsed_json, dict):
+                        content = parsed_json
+                    else:
+                        raise ValueError("Parsed JSON is neither a list nor a dictionary")
+                    
+                    content = json.dumps(content)  # Convert back to JSON string
+                except Exception as e:
+                    logger.warning(f"Failed to repair JSON: {e}")
+                    content = json.dumps({"error": f"Invalid JSON response: {content}"})
+
             endpoint = f"{self.base_url}/proxyllm/pro/mid_temp/invoke"
 
         payload = {
@@ -161,13 +210,16 @@ class ChatCompletionClient:
             choices = [{
                 "message": {
                     "role": "assistant",
-                    "content": data["output"]["content"]
+                    "content": content
                 },
-                "finish_reason": data["output"].get("response_metadata", {}).get("finish_reason", '')
+                "finish_reason": "stop"  # Assuming 'stop' as default finish reason
             }]
-            usage = data["output"].get("usage_metadata", {})
+            
+            # Assuming usage data is not available in this format
+            usage = {}
+            
             return ChatCompletionResponse(choices, usage)
-        except requests.RequestException as e:
+        except Exception as e:
             logger.error(f"Error creating chat completion: {e}")
             raise
 
